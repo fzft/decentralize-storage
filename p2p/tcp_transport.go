@@ -3,38 +3,47 @@ package p2p
 import (
 	"fmt"
 	"io"
+	"log"
 	"net"
+	"sync"
 )
 
 type TCPPeer struct {
-	conn net.Conn
+	net.Conn
 
 	// if we dial a peer, we are the outbound peer
 	// if we accept a peer, we are the inbound peer
 	outbound bool
+
+	Wg sync.WaitGroup
 }
 
 func NewTCPPeer(conn net.Conn, outbound bool) *TCPPeer {
 	return &TCPPeer{
-		conn:     conn,
+		Conn:     conn,
 		outbound: outbound,
 	}
 }
 
-// Close closes the peer.
-func (p *TCPPeer) Close() error {
-	return p.conn.Close()
-}
-
-// RemoteAddr returns the remote network address.
-func (p *TCPPeer) RemoteAddr() net.Addr {
-	return p.conn.RemoteAddr()
-}
+//// Close closes the peer.
+//func (p *TCPPeer) Close() error {
+//	return p.conn.Close()
+//}
+//
+//// RemoteAddr returns the remote network address.
+//func (p *TCPPeer) RemoteAddr() net.Addr {
+//	return p.conn.RemoteAddr()
+//}
 
 // Send sends a payload to the peer.
 func (p *TCPPeer) Send(payload []byte) error {
-	_, err := p.conn.Write(payload)
+	_, err := p.Conn.Write(payload)
 	return err
+}
+
+// CloseStream closes the stream.
+func (p *TCPPeer) CloseStream() {
+	p.Wg.Done()
 }
 
 type TCPTransportOpts struct {
@@ -89,6 +98,7 @@ func (t *TCPTransport) acceptLoop() {
 		if err != nil {
 			return
 		}
+		log.Printf("handleConn: %s", conn.RemoteAddr())
 		go t.handleConn(conn, false)
 	}
 }
@@ -113,8 +123,8 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 		return
 	}
 
-	rpc := RPC{}
 	for {
+		rpc := RPC{}
 		err := t.Decoder.Decode(conn, &rpc)
 
 		if err != nil {
@@ -124,9 +134,18 @@ func (t *TCPTransport) handleConn(conn net.Conn, outbound bool) {
 			fmt.Println("handleConn", err)
 			return
 		}
-
 		rpc.From = conn.RemoteAddr()
+
+		if rpc.Stream {
+			peer.Wg.Add(1)
+			fmt.Printf("(%s) incoming stream, waiting...\n", conn.RemoteAddr())
+			peer.Wg.Wait()
+			fmt.Printf("(%s) stream close, continue read loop...\n", conn.RemoteAddr())
+			continue
+		}
+
 		t.rpcCh <- rpc
+
 	}
 }
 
@@ -142,6 +161,12 @@ func (t *TCPTransport) Dial(addr string) error {
 		return err
 	}
 
+	log.Printf("dial handleConn: %s", conn.RemoteAddr())
 	go t.handleConn(conn, true)
 	return nil
+}
+
+// ListenAddr returns the listening address of the transport.
+func (t *TCPTransport) ListenAddr() net.Addr {
+	return t.Listener.Addr()
 }

@@ -4,9 +4,9 @@ import "net"
 
 // Peer is the interface that wraps the basic methods of a peer.
 type Peer interface {
-	Close() error
-	RemoteAddr() net.Addr
+	net.Conn
 	Send([]byte) error
+	CloseStream()
 }
 
 // Transport is the interface that wraps the basic methods of a transport.
@@ -18,4 +18,5 @@ type Transport interface {
 	Consume() <-chan RPC
 	Close() error
 	Dial(addr string) error
+	ListenAddr() net.Addr
 }

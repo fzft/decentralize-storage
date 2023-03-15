@@ -1,4 +1,4 @@
-package storage
+package main
 
 import (
 	"bytes"
@@ -14,7 +14,7 @@ func TestSore(t *testing.T) {
 	key := "hello"
 	data := []byte("world")
 
-	if err := s.writeStream(key, bytes.NewReader(data)); err != nil {
+	if _, err := s.writeStream(key, bytes.NewReader(data)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -40,14 +40,14 @@ func TestDelete(t *testing.T) {
 	assert.True(t, !s.Exists(key))
 }
 
-func newStore(t *testing.T) *Store {
-	opts := StoreOpts{
-		PathTransformFunc: CASPathTransformFunc,
+func newStore(t *testing.T) *main.Store {
+	opts := main.StoreOpts{
+		PathTransformFunc: main.CASPathTransformFunc,
 	}
-	s := NewStore(opts)
+	s := main.NewStore(opts)
 	return s
 }
 
-func teardown(t *testing.T, s *Store) {
+func teardown(t *testing.T, s *main.Store) {
 	s.Clear()
 }
